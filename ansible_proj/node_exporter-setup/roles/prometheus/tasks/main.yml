@@ -1,0 +1,68 @@
+- name: Install dependencies
+  apt:
+    name: [curl, tar]
+    state: present
+  become: yes
+
+- name: Create Prometheus directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - "{{ prometheus_config_dir }}"
+    - "{{ prometheus_data_dir }}"
+
+- name: Download Prometheus
+  get_url:
+    url: "{{ prometheus_download_url }}"
+    dest: "/tmp/prometheus.tar.gz"
+
+- name: Extract Prometheus
+  unarchive:
+    src: "/tmp/prometheus.tar.gz"
+    dest: "/tmp"
+    remote_src: yes
+
+- name: Move binaries
+  command: mv /tmp/prometheus-{{ prometheus_version }}.linux-amd64/{{ item }} {{ prometheus_install_dir }}/{{ item }}
+  loop:
+    - prometheus
+    - promtool
+
+# - name: Copy console files
+#   copy:
+#     src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/consoles"
+#     dest: "{{ prometheus_config_dir }}/consoles"
+#     remote_src: yes
+
+# - name: Copy console_libraries files
+#   copy:
+#     src: "/tmp/prometheus-{{ prometheus_version }}.linux-amd64/console_libraries"
+#     dest: "{{ prometheus_config_dir }}/console_libraries"
+#     remote_src: yes
+
+- name: Template Prometheus config
+  template:
+    src: prometheus.yml.j2
+    dest: "{{ prometheus_config_dir }}/prometheus.yml"
+
+
+
+
+- name: Setup Prometheus service
+  template:
+    src: prometheus.service.j2
+    dest: /etc/systemd/system/prometheus.service
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: yes
+
+- name: Enable and start Prometheus
+  systemd:
+    name: prometheus
+    enabled: yes
+    state: started
